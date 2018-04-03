@@ -10,7 +10,8 @@ using namespace std;
 #define file "/home/haimin/CLionProjects/yunchouxiu/instances/DSJC500.5.col"
 #define log "/home/haimin/CLionProjects/yunchouxiu/log.txt"
 #define Seed 2018
-#define MaxIter 5000
+#define MaxIterInit 50000000
+#define MaxIterCross 20000
 #define population 15
 #define MaxSameIter 500000
 #define inf 0x7fffffff
@@ -23,7 +24,7 @@ using Engine = default_random_engine;
 const size_t N = 505, K_origin = 55;
 
 Sol_t Sol, BestSol;
-Sol_t Sol_Rec[K_origin + 1];
+Sol_t Sol_Rec[population + 1];
 ll f, Best_f, rec_f, worst_f, f_sol_best;
 ll f_sol[N];
 size_t K, min_index;
@@ -58,6 +59,13 @@ ll cal_f(size_t index) {
 
 int cal_delta(const Move & m) {
     return static_cast<int>(Adjacent_Color_Table[m.u][m.vj]) - static_cast<int>(Adjacent_Color_Table[m.u][m.vi]);
+}
+
+
+void solCopy(Sol_t src, Sol_t dst) {
+    for (size_t i = 0; i != src.size() ; ++i) {
+        src[i] = dst[i];
+    }
 }
 
 void initialPopulation() {
@@ -147,6 +155,10 @@ void makeMove(const Move & m, size_t iter, size_t index) {
 //    cout << m.u << " " << m.vi << " " << m.vj << " " << m.delt << endl;
     f += m.delt;
     Best_f = f < Best_f ? f : Best_f;
+    if (f < Best_f) {
+        Best_f = f;
+        solCopy(BestSol, Sol_Rec[index]);
+    }
 //    cout << "f: " << f << endl;
     TabuTenure[m.u][m.vi] = iter + f + e() % 10 + 1;
     for (auto &r : graph[m.u]) {
@@ -155,13 +167,13 @@ void makeMove(const Move & m, size_t iter, size_t index) {
     }
 }
 
-void TabuSearch(size_t index) {
+void TabuSearch(size_t index, size_t iterNum) {
     Move m;
     size_t iter = 0;
     size_t cnt = 0;
     ll f_rec = Best_f;
     init(index);
-    while (iter < MaxIter) {
+    while (iter < iterNum) {
         m = findMove(iter, index);
         makeMove(m, iter, index);
         iter++;
@@ -189,6 +201,8 @@ void TabuSearch(size_t index) {
 //                 << endl;
 //        }
     }
+    solCopy(Sol_Rec[index], BestSol);
+    f_sol[index] = Best_f;
 }
 
 void crossoverOperator(size_t fst, size_t snd) {
@@ -233,9 +247,23 @@ void crossoverOperator(size_t fst, size_t snd) {
     }
 }
 
-void solCopy(Sol_t src, Sol_t dst) {
-    for (size_t i = 0; i != src.size() ; ++i) {
-        src[i] = dst[i];
+void poolUpdate() {
+    Sol_t index;
+    worst_f = 0;
+    for (size_t i = 0 ; i < population + 1; ++i) {
+        if (f_sol[i] >= worst_f) {
+            if (f_sol[i] > worst_f) {
+                worst_f = f_sol[i];
+                index.clear();
+            }
+            index.push_back(i);
+        }
+    }
+
+    size_t id = e() % index.size();
+    if (worst_f > f_sol[0]) {
+        f_sol[index[id]] = f_sol[0];
+        solCopy(Sol_Rec[index[id]], Sol_Rec[0]);
     }
 }
 
@@ -270,11 +298,10 @@ int main() {
         rec_f = inf;
         needHea = false;
         initialPopulation();
-        for (size_t i = 1; i < K + 1; ++i) {
+        for (size_t i = 1; i < population + 1; ++i) {
             startTime = clock();
-            TabuSearch(i);
+            TabuSearch(i, MaxIterInit);
             endTime = clock();
-            f_sol[i] = cal_f(i);
             if (f_sol[i] < rec_f) {
                 rec_f = f_sol[i];
                 solCopy(BestSol,Sol_Rec[i]);
@@ -293,27 +320,26 @@ int main() {
         f_sol_best = f_sol[min_index];
         if (!needHea) {
             while (true) {
+                _seed = e();
+                e.seed(_seed);
                 size_t fst, snd;
                 fst = e() % K + 1;
                 snd = e() % K + 1;
                 crossoverOperator(fst, snd);
-                TabuSearch(0);
-                f_sol[0] = cal_f(0);
+                TabuSearch(0, MaxIterCross);
                 cout << "cal_f: " << f_sol[0] << endl;
                 if (f_sol[0] < f_sol_best) {
                     f_sol_best = f_sol[0];
                     solCopy(BestSol, Sol_Rec[0]);
                 }
-                worst_f = f_sol[0];
-                size_t worst_index = 0;
-                for (size_t i = 1; i < K + 1; ++i) {
-                    if (f_sol[i] > worst_f) {
-                        worst_index = i;
-                        worst_f = f_sol[i];
-                    }
-                }
-                if (f_sol[0] < worst_f) solCopy(Sol_Rec[worst_index] , Sol_Rec[0]);
+
+                poolUpdate();
+
                 cout << "K: " << K << " Best_f: " << f_sol_best << endl;
+                for (size_t i = 0 ; i < population ; ++i) {
+                    cout << f_sol[i] << " " ;
+                }
+                cout << f_sol[population] << endl;
                 if (f_sol_best == 0) {
                     cout << "Total Time : " << (double) (endTime - startTime) / 1000 << "ms" << endl;
                     fout << "K: " << K << " Best_f: " << Best_f << endl;
