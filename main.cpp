@@ -11,7 +11,7 @@ using namespace std;
 #define log "/home/haimin/CLionProjects/yunchouxiu/log.txt"
 #define Seed 2018
 #define MaxIterInit 1000000
-#define MaxIterCross 400000
+#define MaxIterCross 80000
 #define population 10
 #define MaxSameIter 500000
 #define inf 0x7fffffff
@@ -288,7 +288,7 @@ void poolUpdate() {
     }
 
     size_t id = e() % index.size();
-    if (worst_f > f_sol[0]) {
+    if (worst_f >= f_sol[0]) {
         f_sol[index[id]] = f_sol[0];
         solCopy(Sol_Rec[index[id]], Sol_Rec[0]);
     }
@@ -336,6 +336,7 @@ int main() {
             cout << "Sol_Rec[" << i << "]: " << " f: " << f_sol[min_index] << endl;
             if (!f_sol[i]) {
                 needHea = true;
+                endTime = clock();
                 cout << "Total Time : " << (double) (endTime - startTime) / 1000 << "ms" << endl;
                 fout << "K: " << K << " Best_f: " << Best_f << endl;
                 break;
@@ -357,7 +358,7 @@ int main() {
                 crossoverOperator(fst, snd);
                 TabuSearch(0, MaxIterCross);
                 cout << "cal_f: " << f_sol[0] << endl;
-                if (f_sol[0] < f_sol_best) {
+                if (f_sol[0] <= f_sol_best) {
                     f_sol_best = f_sol[0];
                     solCopy(BestSol, Sol_Rec[0]);
                 }
@@ -371,8 +372,8 @@ int main() {
                 cout << f_sol[population] << endl;
                 if (f_sol_best == 0) {
                     endTime = clock();
-                    cout << "Total Time : " << (double) (endTime - startTime) / 1000*1000 << "s" << endl;
-                    fout << "Total Time : " << (double) (endTime - startTime) / 1000*1000 << "s" << endl;
+                    cout << "Total Time : " << (double) (endTime - startTime) / (1000*1000) << "s" << endl;
+                    fout << "Total Time : " << (double) (endTime - startTime) / (1000*1000) << "s" << endl;
                     fout << "K: " << K << " Best_f: " << Best_f << endl;
                     break;
                 }
@@ -387,5 +388,4 @@ int main() {
 
     cin.rdbuf(backup);
     return 0;
-
 }
