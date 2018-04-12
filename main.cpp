@@ -4,15 +4,18 @@
 #include <vector>
 #include <fstream>
 #include <string>
+#include "NetFlow.h"
 
 using namespace std;
 
 #define file "/home/haimin/CLionProjects/yunchouxiu/instances/DSJC500.5.col"
 #define log "/home/haimin/CLionProjects/yunchouxiu/log.txt"
 #define Seed 2018
-#define MaxIterInit 1000000
-#define MaxIterCross 80000
+#define MaxIterInit 20000000
+#define MaxIterCross 400000
 #define population 10
+#define mutationIter 10
+#define mutationProb 0.1
 #define MaxSameIter 500000
 #define inf 0x7fffffff
 
@@ -21,7 +24,7 @@ typedef long long ll;
 
 using Engine = default_random_engine;
 
-const size_t N = 505, K_origin = 55;
+const size_t N = 505, K_origin = 50;
 
 Sol_t Sol, BestSol;
 Sol_t Sol_Rec[population + 1];
@@ -32,6 +35,8 @@ size_t TabuTenure[N][K_origin];
 size_t Adjacent_Color_Table[N][K_origin];
 size_t isCollected[N];
 size_t point_equ[N * K_origin][2], tabu_point[N * K_origin][2];
+size_t share[N][N];
+
 
 uint32_t index_num, edge_num;
 
@@ -51,6 +56,8 @@ struct Move {
     size_t u, vi, vj;
     int delt;
 };
+
+int dist(size_t fst, size_t snd);
 
 inline ll cal_f(size_t index) {
     ll rec = 0;
@@ -219,7 +226,7 @@ void TabuSearch(size_t index, size_t iterNum) {
     f_sol[index] = Best_f;
 }
 
-void crossoverOperator(size_t fst, size_t snd) {
+void crossoverOperator(size_t fst, size_t snd, bool mutate) {
     uint64_t fst_max = 0, snd_max = 0;
     size_t fst_rec = 0, snd_rec = 0;
     for (size_t k = 0 ; k < K ; ++k) {
@@ -256,11 +263,15 @@ void crossoverOperator(size_t fst, size_t snd) {
             }
         }
     }
-    // for (size_t i = 1 ; i < index_num + 1 ; ++i) {
-    //     if (!isCollected[i]) Sol_Rec[0][i] = BestSol[i];
-    // }
-    for (size_t i = 1 ; i < index_num + 1 ; ++i) {
-        if (!isCollected[i]) Sol_Rec[0][i] = e() % K;
+    if (mutate && (e() % 10000 < mutationProb * 10000)) {
+        for (size_t i = 1; i < index_num + 1; ++i) {
+            if (!isCollected[i]) Sol_Rec[0][i] = e() % K;
+        }
+        cout << "mutation!" << endl;
+    } else {
+        for (size_t i = 1; i < index_num + 1; ++i) {
+            if (!isCollected[i]) Sol_Rec[0][i] = BestSol[i];
+        }
     }
     // uint64_t tmp = cal_f(0);
     // for (size_t i = 1 ; i < index_num + 1 ; ++i) {
@@ -295,7 +306,7 @@ void poolUpdate() {
 }
 
 int main() {
-    size_t u, v;
+    size_t u, v, mutation, f_tmp;
     string s;
     bool needHea;
     clock_t startTime, endTime;
@@ -321,6 +332,7 @@ int main() {
     K = K_origin;
     e.seed(clock());
     while (K--) {
+        mutation = 0;
         startTime = clock();
         rec_f = inf;
         needHea = false;
@@ -350,14 +362,27 @@ int main() {
                 e.seed(_seed);
                 size_t fst, snd;
                 fst = e() % population + 1;
+                f_tmp = Best_f;
                 while (true) {
                     snd = e() % population + 1;
                     if (snd != fst) break;
                 }
                 cout << "fa: " << f_sol[fst] << " mo: " << f_sol[snd] << endl;
-                crossoverOperator(fst, snd);
+                if (mutation == mutationIter) crossoverOperator(fst, snd, true);
+                else crossoverOperator(fst, snd, false);
+
                 TabuSearch(0, MaxIterCross);
+                if (Best_f == f_tmp) {
+                    mutation++;
+                } else {
+                    mutation = 0;
+                    f_tmp = Best_f;
+                }
                 cout << "cal_f: " << f_sol[0] << endl;
+
+//                for (size_t i = 1; i < population; ++i) cout << dist(0,i) << endl;
+
+
                 if (f_sol[0] <= f_sol_best) {
                     f_sol_best = f_sol[0];
                     solCopy(BestSol, Sol_Rec[0]);
@@ -389,3 +414,37 @@ int main() {
     cin.rdbuf(backup);
     return 0;
 }
+
+int dist(size_t fst, size_t snd) {
+    memset(share, 0, sizeof((share)));
+    vector<edge > edges;
+
+    for (size_t i = 0; i < K + 1; ++i) {
+        V_1[i].clear();
+        V_2[i].clear();
+    }
+    for (size_t i = 1; i < index_num + 1; ++i) {
+        V_1[Sol_Rec[fst][i]].push_back(i);
+        V_2[Sol_Rec[snd][i]].push_back(i);
+    }
+    for (size_t k = 0 ; k < K ; ++k)
+        for (size_t t = 0 ; t < K ; ++t)
+            for (auto &i : V_1[k])
+                for (auto &j : V_2[t])
+                    if (i == j)
+                        share[k][t]++;
+    for (size_t k = 0 ; k < K ; ++k)
+        for (size_t t = 0 ; t < K ; ++t) {
+            if (share[k][t] != 0) {
+                edge e(k, t, share[k][t]);
+                edges.emplace_back(e);
+            }
+        }
+
+    NetFlow netFlow(K);
+    netFlow.init(edges);
+    int res = netFlow.getSolution();
+    return res;
+}
+
+
